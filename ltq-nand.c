@@ -116,7 +116,6 @@ void reed_solomon_128bytes_ecc(unsigned char *data_bytes_partial, unsigned char 
             s[2]  = g_add( s[1], temp[2] );
             s[1]  = g_add( s[0], temp[3] );
             s[0]  = g_mul( y, g[0] );
-            
         };
     }
     
