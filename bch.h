@@ -76,4 +76,12 @@ int decode_bch(struct bch_control *bch, const uint8_t *data, unsigned int len,
               const uint8_t *recv_ecc, const uint8_t *calc_ecc,
               const unsigned int *syn, unsigned int *errloc);
 
+#define BLOCK_SIZE 2048
+#define OOB_SIZE   64
+#define ECC_SIZE   512
+#define ECC_BLOCKS (BLOCK_SIZE/ECC_SIZE)
+#define CODE_SIZE  7
+#define ECC_BYTES (CODE_SIZE*ECC_BLOCKS)
+#define ECC_OFFSET (OOB_SIZE-ECC_BYTES)
+
 #endif /* _BCH_H */

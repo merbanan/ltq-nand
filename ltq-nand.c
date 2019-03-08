@@ -1,7 +1,7 @@
 /*
  * Reed Solomon encoder for the GRX350/GRX550 nand controller
  *
- * Copyright (C) 2018 iopsys Software Solutions AB. All rights reserved.
+ * Copyright (C) 2019 iopsys Software Solutions AB. All rights reserved.
  *
  * Author: Benjamin Larsson <benjamin.larsson@iopsys.eu>
  *
@@ -26,16 +26,21 @@
 #include <getopt.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <inttypes.h>
+
+#include "bch.h"
 
 #define MAX_BLOCK_SIZE 524288
 #define MAX_OOB_BLOCK_SIZE 540672
 
-#define ONES 1
 #define ZEROS 0
-#define ECC4 2
-#define ECC3 3
+#define ONES 1
+#define RSECC4 2
+#define RSECC3 3
+#define BCHECC7 4
+#define BCHECC13 5
 
-const char *oob_mode_string[4] = { "Zeros", "Ones", "ECC4", "ECC3" };
+const char *oob_mode_string[6] = { "Zeros", "Ones", "Reed Solomon 4 bytes", "Reed Solomon 3 bytes", "BCH 7 bytes", "BCH 13 bytes" };
 
 unsigned char block_buffer[MAX_BLOCK_SIZE];
 unsigned char out_buffer[MAX_OOB_BLOCK_SIZE];
@@ -99,7 +104,7 @@ void reed_solomon_128bytes_ecc(unsigned char *data_bytes_partial, unsigned char 
     int i;
     unsigned char t[3] = {0};
     
-    if (strength == ECC4) {
+    if (strength == RSECC4) {
         g[3] = 205;
         g[2] =  63;
         g[1] =  92;
@@ -120,7 +125,7 @@ void reed_solomon_128bytes_ecc(unsigned char *data_bytes_partial, unsigned char 
     }
     
     /* 3 bytes mode */
-    if (strength == ECC3) {
+    if (strength == RSECC3) {
 
         g[3] = 0;
         g[2] = g_add(g_add(2,4), 8);
@@ -161,15 +166,24 @@ for(i=0;i<mtd->writesize/128;i++){
 */
 
 
-void print_usage() {
+void print_usage(void) {
     printf("ltq-nand version 1.0\n");     
     printf("Usage: ltq-nand [OPTION]...\n");
     printf("\t -i input file\n");
     printf("\t -o output file\n");
     printf("\t -b block size\n");
     printf("\t -p page size\n");
-    printf("\t -1 fill spare area/OOB with 0xFF\n");
-    printf("\t -0 fill spare area/OOB with 0x00\n");
+    printf("\t -s spare area/oob area size\n");
+    printf("\t -e ecc mode\n");
+    printf("\t\t 0 0x00 fill\n");
+    printf("\t\t 1 0xFF fill\n");
+    printf("\t\t 2 Reed Solomon 3 byte\n");
+    printf("\t\t 3 Reed Solomon 4 byte\n");
+    printf("\t\t 4 BCH 512 7 bytes\n");
+    printf("\t\t 5 BCH 512 13 bytes\n");
+    printf("Default command is:\n");
+    printf("./ltq-nand -i infile -o outfile -b 131072 -p 2048 -s 64 -m 4\n");
+    return;
 }
 
 int main(int argc,char** argv)
@@ -181,34 +195,30 @@ int main(int argc,char** argv)
     int b_idx, p_idx, ei_idx;
     int page_size = 2048;
     int pages_in_block = 0;
-    int padd_zero = 0;
-    int padd_ones = 0;
-    int ecc_strength = 4;
-    int oob_mode = ECC4;
+    int ecc_mode = BCHECC7;
     int oob_area_size = 64;
     const char* input_file = NULL;
     const char* output_file = NULL;
     FILE *in_file, *out_file;
     struct stat st;
 
-    while ((option = getopt(argc, argv,"e:i:o:b:p:10")) != -1) {
+    while ((option = getopt(argc, argv,"e:i:o:b:p:s:")) != -1) {
         switch (option) {
-            case 'i' : input_file = optarg; 
+            case 'i' : input_file = optarg;
                 break;
             case 'o' : output_file = optarg;
                 break;
             case 'b' : block_size = atoi(optarg);
                 break;
-            case '1' : padd_ones = 1;
-                break;
-            case '0' : padd_zero = 1;
-                break;
             case 'p' : page_size = atoi(optarg);
                 break;
-            case 'e' : ecc_strength = atoi(optarg);
+            case 'e' : ecc_mode = atoi(optarg);
                 break;
-            default: print_usage(); 
-                 exit(EXIT_FAILURE);
+            case 's' : oob_area_size = atoi(optarg);
+                break;
+            default:
+                print_usage();
+                goto exit;
         }
     }
     if (argc < 4) {
@@ -235,8 +245,8 @@ int main(int argc,char** argv)
     } 
     
     
-    if ((ecc_strength != 3) && (ecc_strength != 4)) {
-        printf("-e only ecc strength of 3 or 4 bytes supported.\n");
+    if ((ecc_mode < 0) && (ecc_mode > BCHECC13)) {
+        printf("-e unsupported ecc mode %d.\n",ecc_mode);
         goto exit;
     }
     
@@ -271,15 +281,6 @@ int main(int argc,char** argv)
         goto exit;
     }
     
-    /* configure oob area data */
-    if (padd_zero)
-        oob_mode = ZEROS;
-    if (padd_ones)
-        oob_mode = ONES;
-    if (ecc_strength == 3)
-        oob_mode = ECC3;
-    
-    
     blocks = st.st_size / block_size;
     oob_area_size = page_size / 32;
     pages_in_block = block_size / page_size;
@@ -290,8 +291,8 @@ int main(int argc,char** argv)
     printf("Input file blocks %d\n", blocks);
     printf("Page size: %d\n", page_size);
     printf("Pages in block: %d\n", pages_in_block);
-    printf("ECC strength: %d\n", ecc_strength);
-    printf("OOB area generation: %s\n", oob_mode_string[oob_mode]);
+    printf("ECC mode: %d\n", ecc_mode);
+    printf("OOB area generation: %s\n", oob_mode_string[ecc_mode]);
     printf("OOB area size %d\n", oob_area_size);
     
     for (b_idx = 0 ; b_idx < blocks ; b_idx++ ) {
@@ -303,14 +304,14 @@ int main(int argc,char** argv)
             memcpy(&out_buffer[p_idx*(page_size+oob_area_size)], &block_buffer[p_idx*page_size], page_size);
             /* generate oob area data */
             //printf("offset %d 0x%x\n", (p_idx+1)*page_size, (p_idx+1)*page_size);
-            switch (oob_mode) {
+            switch (ecc_mode) {
                 case ZEROS: memset(&out_buffer[(p_idx+1)*page_size+p_idx*oob_area_size], 0, oob_area_size); break;
                 case ONES:  memset(&out_buffer[(p_idx+1)*page_size+p_idx*oob_area_size], 0xFF, oob_area_size); break;
-                case ECC4: {
+                case RSECC4: {
                     memset(&out_buffer[(p_idx+1)*page_size+p_idx*oob_area_size], 0xFF, oob_area_size);
                     for (ei_idx = 0 ; ei_idx < page_size/128 ; ei_idx++) {
                         unsigned char s[4] = {0};
-                        reed_solomon_128bytes_ecc(&block_buffer[ p_idx*page_size + ei_idx*128], s, ECC4);
+                        reed_solomon_128bytes_ecc(&block_buffer[ p_idx*page_size + ei_idx*128], s, RSECC4);
                         out_buffer[(p_idx+1)*page_size+p_idx*oob_area_size + ei_idx*4  ] = s[3];
                         out_buffer[(p_idx+1)*page_size+p_idx*oob_area_size + ei_idx*4+1] = s[2];
                         out_buffer[(p_idx+1)*page_size+p_idx*oob_area_size + ei_idx*4+2] = s[1];
@@ -318,11 +319,11 @@ int main(int argc,char** argv)
                     }
                     break;
                 }
-                case ECC3: {
+                case RSECC3: {
                     memset(&out_buffer[(p_idx+1)*page_size+p_idx*oob_area_size], 0xFF, oob_area_size);
                     for (ei_idx = 0 ; ei_idx < page_size/128 ; ei_idx++) {
                         unsigned char s[4] = {0};
-                        reed_solomon_128bytes_ecc(&block_buffer[ p_idx*page_size + ei_idx*128], s, ECC3);
+                        reed_solomon_128bytes_ecc(&block_buffer[ p_idx*page_size + ei_idx*128], s, RSECC3);
                         out_buffer[(p_idx+1)*page_size+p_idx*oob_area_size + ei_idx*3  ] = s[2];
                         out_buffer[(p_idx+1)*page_size+p_idx*oob_area_size + ei_idx*3+1] = s[1];
                         out_buffer[(p_idx+1)*page_size+p_idx*oob_area_size + ei_idx*3+2] = s[0];
@@ -335,7 +336,7 @@ int main(int argc,char** argv)
     }
     
 exit:
-    fclose(in_file);
-    fclose(out_file);
+    if (in_file) fclose(in_file);
+    if (out_file) fclose(out_file);
     exit(0);
 }

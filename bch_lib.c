@@ -10,14 +10,6 @@
 #include <stdarg.h>
 #include <fcntl.h>
 
-#define BLOCK_SIZE 2048
-#define OOB_SIZE   64
-#define ECC_SIZE   512
-#define ECC_BLOCKS (BLOCK_SIZE/ECC_SIZE)
-#define CODE_SIZE  7
-#define ECC_BYTES (CODE_SIZE*ECC_BLOCKS)
-#define ECC_OFFSET (OOB_SIZE-ECC_BYTES)
-
 
 /*
  * Generic binary BCH encoding/decoding library
