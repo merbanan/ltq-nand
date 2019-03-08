@@ -1737,19 +1737,7 @@ void __nand_calculate_ecc(const unsigned char *buf, unsigned int eccsize,
 
 
 
-/**
- * struct nand_bch_control - private NAND BCH control structure
- * @bch:       BCH control structure
- * @ecclayout: private ecc layout for this BCH configuration
- * @errloc:    error location array
- * @eccmask:   XOR ecc mask, allows erased pages to be decoded as valid
- */
-struct nand_bch_control {
-       struct bch_control   *bch;
-//     struct nand_ecclayout ecclayout;
-       unsigned int         *errloc;
-       unsigned char        *eccmask;
-};
+//
 /**
  * nand_bch_calculate_ecc - [NAND Interface] Calculate ECC for data block
  * @mtd:       MTD block structure
@@ -1850,7 +1838,7 @@ int main( int argc, char ** argv )
 {
        FILE *ifh, *ofh;
        char *ifile, *ofile;
-       unsigned char buf[ BLOCK_SIZE+OOB_SIZE ];
+       unsigned char buf[ PAGR_SIZE+OOB_SIZE ];
        unsigned char code[ CODE_SIZE ];
        int  len, bptr, cptr, wptr;
        struct nand_bch_control *nbch;
@@ -1883,14 +1871,14 @@ int main( int argc, char ** argv )
 
        while (!feof(ifh))
        {
-               len = fread( buf, sizeof(char), BLOCK_SIZE, ifh );
-               if ( len != BLOCK_SIZE )
+               len = fread( buf, sizeof(char), PAGE_SIZE, ifh );
+               if ( len != PAGE_SIZE )
                {
                        break;
                }
 
-               wptr = BLOCK_SIZE + ECC_OFFSET;
-               for ( bptr=0; bptr < BLOCK_SIZE; bptr += ECC_SIZE )
+               wptr = PAGE_SIZE + ECC_OFFSET;
+               for ( bptr=0; bptr < PAGE_SIZE; bptr += ECC_SIZE )
                {
 //                     __nand_calculate_ecc( &buf[bptr], 256, code );
                        nand_bch_calculate_ecc( nbch, &buf[bptr], code );

@@ -76,10 +76,27 @@ int decode_bch(struct bch_control *bch, const uint8_t *data, unsigned int len,
               const uint8_t *recv_ecc, const uint8_t *calc_ecc,
               const unsigned int *syn, unsigned int *errloc);
 
-#define BLOCK_SIZE 2048
+/**
+ * struct nand_bch_control - private NAND BCH control structure
+ * @bch:       BCH control structure
+ * @ecclayout: private ecc layout for this BCH configuration
+ * @errloc:    error location array
+ * @eccmask:   XOR ecc mask, allows erased pages to be decoded as valid
+ */
+struct nand_bch_control {
+       struct bch_control   *bch;
+//     struct nand_ecclayout ecclayout;
+       unsigned int         *errloc;
+       unsigned char        *eccmask;
+};
+
+struct nand_bch_control *nand_bch_init( unsigned int eccsize, unsigned int eccbytes );
+int nand_bch_calculate_ecc( struct nand_bch_control *nbc, const unsigned char *buf, unsigned char *code);
+
+#define PAGE_SIZE 2048
 #define OOB_SIZE   64
 #define ECC_SIZE   512
-#define ECC_BLOCKS (BLOCK_SIZE/ECC_SIZE)
+#define ECC_BLOCKS (PAGE_SIZE/ECC_SIZE)
 #define CODE_SIZE  7
 #define ECC_BYTES (CODE_SIZE*ECC_BLOCKS)
 #define ECC_OFFSET (OOB_SIZE-ECC_BYTES)

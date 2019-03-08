@@ -199,8 +199,14 @@ int main(int argc,char** argv)
     int oob_area_size = 64;
     const char* input_file = NULL;
     const char* output_file = NULL;
-    FILE *in_file, *out_file;
+    FILE *in_file = NULL, *out_file = NULL;
     struct stat st;
+
+    /* Initialize BCH lib data and parameters */
+    int cptr, wptr;
+    unsigned char bch_code[ CODE_SIZE ];
+    struct nand_bch_control *nbch;
+    nbch = nand_bch_init( ECC_SIZE, CODE_SIZE );
 
     while ((option = getopt(argc, argv,"e:i:o:b:p:s:")) != -1) {
         switch (option) {
@@ -280,11 +286,11 @@ int main(int argc,char** argv)
         printf("File size not multiple of block size\n");
         goto exit;
     }
-    
+
     blocks = st.st_size / block_size;
     oob_area_size = page_size / 32;
     pages_in_block = block_size / page_size;
-    
+
     printf("Input file %s\n", input_file);
     printf("Size of input file: %d\n", (int)st.st_size);
     printf("Block size: %d\n", block_size);
@@ -330,6 +336,20 @@ int main(int argc,char** argv)
                     }
                     break;
                 }
+                case BCHECC7: {
+                    memset(&out_buffer[(p_idx+1)*page_size+p_idx*oob_area_size], 0xFF, oob_area_size);
+                    wptr = (p_idx+1)*page_size+p_idx*oob_area_size + ECC_OFFSET;
+                    for (ei_idx = 0 ; ei_idx < page_size/512 ; ei_idx++) {
+                        nand_bch_calculate_ecc( nbch, &block_buffer[ p_idx*page_size + ei_idx*512], bch_code );
+                        for ( cptr=0; cptr < CODE_SIZE; cptr++ ) {
+                                out_buffer[wptr++] = bch_code[ cptr ];
+                        }
+                    }
+                    break;
+                }
+                default:
+                    printf("Unsupported option %d\n", ecc_mode);
+                    goto exit;
             }
         }
         fwrite(out_buffer, block_size+(oob_area_size*pages_in_block), 1, out_file);
