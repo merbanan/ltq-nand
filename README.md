@@ -2,7 +2,7 @@
 Reed Solomon encoder for the GRX350/GRX550 nand controller
 
 Only BCH 512 7 bytes mode has been verified.
-
+```
 ltq-nand version 1.0
 Usage: ltq-nand [OPTION]...
 	 -i input file
@@ -19,3 +19,4 @@ Usage: ltq-nand [OPTION]...
 		 5 BCH 512 13 bytes
 Default command is:
 ./ltq-nand -i infile -o outfile -b 131072 -p 2048 -s 64 -m 4
+```
